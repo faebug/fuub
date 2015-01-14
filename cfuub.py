@@ -360,7 +360,6 @@ td {border: 2px solid grey;background-color: lightgreen;}
 logtail = "</table>\n</body></html>"
 
 if os.path.isfile(logpath + logname):
-	myprint("Log exists")
 	logfile = open(logpath + logname, "r+")
 	html = logfile.read()
 	if len(html)>10:
@@ -371,7 +370,6 @@ if os.path.isfile(logpath + logname):
 	logfile = open(logpath + logname, "w")
 	logfile.write( loghead + logold + log + logtail )
 	logfile.close()
-
 	
 else:                    
 	myprint("Creating log at "+ logpath+logname)
