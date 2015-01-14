@@ -1,5 +1,4 @@
-# fuub
-#Commons fair use upload bot
+# Commons fair use upload bot (FUUB)
 
 **This inter-wiki bot is currently in a trial phase.**
 
