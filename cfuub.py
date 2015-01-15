@@ -7,6 +7,7 @@
 	Migration to WMFlabs
 	Swap calls to Pywikibot (core)
 	Add logs to http://tools-static.wmflabs.org/commonsfairuseupload/
+	Bot flags requested on en.wp and commons
 	Author: Fae
 	License: CC-BY-SA-4.0
 
@@ -62,7 +63,7 @@ def remove_template(template_name, text):
 	# TODO: Catch all redirects accurately
 	return re.sub(r'(?i){{' + template_name + r'[^}]*}}\s*', '', text, re.IGNORECASE)
 
-# Gets argument of a one-argument template (with default argument name 1)
+# Gets argument of a one-argument template (with optional default argument name 1)
 def get_template_arg(template_name, text):
 	# Use IGNORECASE to catch redirects with alternate capitalizations
 	# TODO: Catch all redirects accurately
@@ -76,10 +77,13 @@ def get_template_arg(template_name, text):
 def describe_file_history(sitename, filepage):
 	# TODO: localize this based on sitename
 	desc = "\n\n== Wikimedia Commons file description page history ==\n"
+	# CONVERT THIS
 	for revision in filepage.revisions(prop = 'timestamp|user|comment|content'):
 		desc += "* " + format_time(revision['timestamp']) + " [[:commons:User:" + revision['user'] + "|" + revision['user'] + "]] ''<nowiki>" + revision['comment'] + "</nowiki>''\n"
 	return desc
 
+
+# CONVERT THIS
 def describe_upload_log(sitename, filepage):
 	# TODO: localize this based on sitename
 	desc = "\n== Wikimedia Commons upload log ==\n"
@@ -102,7 +106,7 @@ def get_request_fair_use_template(reason):
 
 def get_candidate_template(sitename, reason):
 	reason_arg = "|reason=" + reason if reason else ''
-	lang = str.split(sitename, '.')[0]
+	lang = sitename[0]
 	if lang == 'en':
 		return "{{Fair use candidate from Commons|" + filepage.title() + reason_arg + "}}\n\n"
 	elif lang == 'et':
@@ -110,7 +114,7 @@ def get_candidate_template(sitename, reason):
 
 def get_local_tags(sitename, historyinfo):
 	desc = ''
-	if (sitename == 'en.wikipedia.org'):
+	if (sitename == ['en','wikipedia']):
 		desc += "{{di-no fair use rationale|date=" + time.strftime("%d %B %Y", time.gmtime()) + "}}\n"
 		if historyinfo['width'] > 400:
 			desc += "{{Non-free reduce}}\n"
@@ -118,7 +122,7 @@ def get_local_tags(sitename, historyinfo):
 
 def get_local_tags_pd_us(sitename, historyinfo):
 	desc = ''
-	if (sitename == 'en.wikipedia.org'):
+	if (sitename == ['en','wikipedia']):
 		desc += "{{PD-US-1923-abroad}}\n"
 	else:
 		desc += "{{PD-US}}\n"
@@ -149,7 +153,8 @@ class MyURLopener(urllib.FancyURLopener):
 myprint('Starting Commons fair use upload bot run at ' + time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()))
 sys.stdout.flush()
 
-logname =  "Commons_fair_use_upload_bot_"+ time.strftime("%Y", time.gmtime()) + ".html"
+logyear = time.strftime("%Y", time.gmtime())
+logname =  "Commons_fair_use_upload_bot_"+ logyear + ".html"
 logpath = "/data/project/commonsfairuseupload/www/static/"
 log = ""
 commonsuserlink = "http://commons.wikimedia.org/wiki/User:"
@@ -181,6 +186,7 @@ for filepage in gen:
 		continue
 	myprint(filepage.title())
 	sys.stdout.flush()
+	# Could use imagepage.getFileVersionHistory()[-1]['descriptionurl']
 	download_to_file(filepage, '/tmp/downloadedfile')
 	filedescription = filepage.get()
 	if not contains_template('Fair use delete', filedescription):
@@ -195,7 +201,7 @@ for filepage in gen:
 	if not is_commons_admin(taguser):
 		logline = 'Request was made by non-admin user <a href="{0}{1}">{1}</a>'.format(commonsuserlink, taguser.encode('utf-8')) + ' for <a href="{}{}">{}</a>'.format(commonsimagelink, re.sub(" ", "_", filepage.title().encode('utf-8')), filepage.title().encode('utf-8')) + ', replacing with {{Request fair use delete}}'
 		myprint(logline.decode('utf-8', 'ignore'))
-		log += '\n<tr><td>' + time.strftime("%Y-%m-%d %H:%M", time.gmtime()) + '<td>' + logline
+		log += '\n<tr><td>' + time.strftime("%Y-%m-%d&nbsp;%H:%M", time.gmtime()) + '<td>' + logline
 		filedescription = get_request_fair_use_template(reason) + filedescription
 		if not dry_run:
 			filepage.put(filedescription, summary = '{{tl|Fair use delete}} tag must be placed by an admin, changing to {{tl|Request fair use delete}}')
@@ -204,14 +210,9 @@ for filepage in gen:
 		continue
 	myprint('Tag added by administrator ' + taguser)
 
-	historyinfo = filepage.imagehistory().next()
-
-	#site = mwclient.Site('et.wikipedia.org')
-	#site.login(username, password)
-	#filepagelocal = site.Images[filepage.page_title]
-	#if len(list(filepagelocal.imageusage())) > 0:
-		#myprint('Skipping (User:Commons fair use upload bot]] does not yet have upload privileges on etwiki)')
-		#continue
+	imagepage = pywikibot.page.FilePage(sitecommons, filepage.title())
+	historyinfo = imagepage.getFileVersionHistory()[-1]		# Most recent data
+	# key: comment, sha1, url, timestamp, metadata, height, width, mime, user, descriptionurl, size
 
 	uploaded_sites = []
 	for sitename in supported_wikis:
@@ -354,8 +355,8 @@ loghead = '''<html>
 table {background-color: silver;}
 td {border: 2px solid grey;background-color: lightgreen;}
 </style>
-<body>
-<h5>This bot is currently in a trial mode, so the log file here is illustrative using test log entries and may not be accurate!</h5>
+<body><h1>''' + logyear + ''' log for Commons fair use upload bot</h1>
+<p>This bot is currently in a trial mode, so this log is illustrative using test log entries and may not be accurate!</p>
 <table>'''
 logtail = "</table>\n</body></html>"
 
@@ -366,11 +367,10 @@ if os.path.isfile(logpath + logname):
 		logold = html.split('<table>')[1].split('</table>')[0]
 	else:
 		logold = ""
-	logfile.close()
+	logfile.close()	# Ensure overwrite
 	logfile = open(logpath + logname, "w")
 	logfile.write( loghead + logold + log + logtail )
 	logfile.close()
-	
 else:                    
 	myprint("Creating log at "+ logpath+logname)
 	logfile = open(logpath + logname, "w")
